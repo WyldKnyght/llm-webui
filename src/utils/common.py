@@ -31,11 +31,14 @@ def get_runs_models():
         run_output_model = os.path.join(run_name_dir, "output_model")
         if os.path.exists(run_output_model):
             run_output_model_names = os.listdir(run_output_model)
-            for run_output_model_name in run_output_model_names:
-                if run_output_model_name.find("merged_") >= 0:
-                    runs_output_model.append(os.path.join(run_name, "output_model", run_output_model_name, "ori"))
-    runs_output_model = runs_output_model[::-1]
-    return runs_output_model
+            runs_output_model.extend(
+                os.path.join(
+                    run_name, "output_model", run_output_model_name, "ori"
+                )
+                for run_output_model_name in run_output_model_names
+                if run_output_model_name.find("merged_") >= 0
+            )
+    return runs_output_model[::-1]
 
 def get_runs_model_names_from_dir(root_dir):
 
@@ -78,13 +81,15 @@ def get_hg_model_names_from_dir(root_dir):
     model_names.sort(key=lambda file: os.path.getmtime(os.path.join(root_dir, file)),reverse=True)
     return model_names
 def get_hg_model_names_from_dir(root_dir,prefix="models"):
-    output = []
     model_names_1 = glob.glob(os.path.join(root_dir, "**", "**", "config.json"), recursive=False)
     model_names_2 = glob.glob(os.path.join(root_dir, "**","config.json"), recursive=False)
     model_names_1 += model_names_2
-    for name in model_names_1:
-        output.append(name[name.find(prefix)+len(prefix)+1:name.find("config.json")-1])
-    return output
+    return [
+        name[
+            name.find(prefix) + len(prefix) + 1 : name.find("config.json") - 1
+        ]
+        for name in model_names_1
+    ]
 
 def get_hg_model_names_and_gguf_from_dir(hg_model_root_dir,runs_model_root_dir):
     output = []
@@ -104,10 +109,14 @@ def get_hg_model_names_and_gguf_from_dir(hg_model_root_dir,runs_model_root_dir):
     for file in runs_gguf_files:
         file_pos = file.find("runs")
         output.append(file[file_pos:])
-    for file in root_model_gguf_files:
-        output.append(file[file.find("models")+len("models")+1:])
-    for file in root_model_gguf_files1:
-        output.append(file[file.find("models")+len("models")+1:])
+    output.extend(
+        file[file.find("models") + len("models") + 1 :]
+        for file in root_model_gguf_files
+    )
+    output.extend(
+        file[file.find("models") + len("models") + 1 :]
+        for file in root_model_gguf_files1
+    )
     for file in root_model_hg_dir0:
         file_pos1 = file.find("models")
         file_pos2 = file.find("config.json")
@@ -124,8 +133,7 @@ def get_hg_model_names_and_gguf_from_dir(hg_model_root_dir,runs_model_root_dir):
 def read_yaml(yaml_path):
     with open(yaml_path) as f1:
         try:
-            data = yaml.safe_load(f1)
-            return data
+            return yaml.safe_load(f1)
         except yaml.YAMLError as e:
             raise ValueError(f'Error loading yaml file: {e}')
 
