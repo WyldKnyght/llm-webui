@@ -10,8 +10,7 @@ class Inference():
     def get_prompt(self,input):
         return self.prompt_template.format(question=input)
     def __call__(self ,input):
-        gen_output = self.infer(input)
-        return  gen_output
+        return self.infer(input)
     @abstractmethod
     def free_memory(self):
         pass

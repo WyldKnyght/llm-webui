@@ -72,8 +72,7 @@ class QAWithRAG():
             loader = Docx2txtLoader(doc_path)
         else:
             raise ValueError(f"Unsupported format: {self.doc_ext}")
-        data = loader.load()
-        return data
+        return loader.load()
     def add_document_to_vector_store(self, doc_path ,search_top_k ,search_score_threshold):
         data = self.get_document_data(doc_path)
         data = self.text_splitter.split_documents(data)
@@ -121,27 +120,21 @@ class QAWithRAG():
         )
     def generate(self, question):
         self.chat_history = []
-        if self.retriever:
-
-            chain_type_kwargs = {"prompt": self.prompt_template ,"verbose": False}
-            self.qa = RetrievalQA.from_chain_type(llm=self.langchain_llm, chain_type="stuff", retriever=self.retriever,
-                                                  return_source_documents=True,
-                                                  chain_type_kwargs=chain_type_kwargs)
-            result = self.qa({"query": question}, return_only_outputs=True)
-            retrieved_txt_list = []
-            if len(result['source_documents'] ) >0:
-                if self.doc_ext == "txt":
-                    for doc_text in result['source_documents']:
-                        retrieved_txt_list.append(list(doc_text)[0][1])
-                elif self.doc_ext == "pdf":
-                    for doc_text in result['source_documents']:
-                        retrieved_txt_list.append(list(doc_text)[0][1])
-                elif self.doc_ext == "docx":
-                    for doc_text in result['source_documents']:
-                        retrieved_txt_list.append(list(doc_text)[0][1])
-                answer = result['result']
-            else:
-                answer = "Sorry, I can't find any relevant information in document. " + result['result']
-            return answer, retrieved_txt_list
-        else:
+        if not self.retriever:
             return "", retrieved_txt_list
+        chain_type_kwargs = {"prompt": self.prompt_template ,"verbose": False}
+        self.qa = RetrievalQA.from_chain_type(llm=self.langchain_llm, chain_type="stuff", retriever=self.retriever,
+                                              return_source_documents=True,
+                                              chain_type_kwargs=chain_type_kwargs)
+        result = self.qa({"query": question}, return_only_outputs=True)
+        retrieved_txt_list = []
+        if len(result['source_documents'] ) >0:
+            retrieved_txt_list.extend(
+                list(doc_text)[0][1]
+                for doc_text in result['source_documents']
+                if self.doc_ext in ["txt", "pdf", "docx"]
+            )
+            answer = result['result']
+        else:
+            answer = "Sorry, I can't find any relevant information in document. " + result['result']
+        return answer, retrieved_txt_list

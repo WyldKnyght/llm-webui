@@ -49,26 +49,24 @@ class QloraTrainer(PeftTrainer):
             else:
                 raise ValueError(
                     f'Invalid Dataset format {self.config["dataset"]["hg_dataset_dir"]}.')
-        else:
-
-            if self.config["dataset"]["local_dataset_dir"]:
-                if os.path.exists(os.path.join(self.config["dataset"]["local_dataset_dir"], "dataset_infos.json")):
-                    if self.config["dataset"]["local_train_set"]:
-                        self.train_dataset = datasets.load_dataset(self.config["dataset"]["local_dataset_dir"],
-                                                                   split=self.config["dataset"]["local_train_set"])
-                    if self.config["dataset"]["local_val_set"]:
-                        self.val_dataset = datasets.load_dataset(self.config["dataset"]["local_dataset_dir"],
-                                                                   split=self.config["dataset"]["local_val_set"])
-                elif os.path.exists(os.path.join(self.config["dataset"]["local_dataset_dir"], "dataset_dict.json")):
-                    if self.config["dataset"]["local_train_set"]:
-                        self.train_dataset = datasets.load_from_disk(
-                            self.config["dataset"]["local_dataset_dir"] + "/" + self.config["dataset"]["local_train_set"])
-                    if self.config["dataset"]["local_val_set"]:
-                        self.val_dataset = datasets.load_from_disk(
-                            self.config["dataset"]["local_dataset_dir"] + "/" + self.config["dataset"]["local_val_set"])
-                else:
-                    raise ValueError(
-                        f'Invalid Dataset format {self.config["dataset"]["local_dataset_dir"]}.')
+        elif self.config["dataset"]["local_dataset_dir"]:
+            if os.path.exists(os.path.join(self.config["dataset"]["local_dataset_dir"], "dataset_infos.json")):
+                if self.config["dataset"]["local_train_set"]:
+                    self.train_dataset = datasets.load_dataset(self.config["dataset"]["local_dataset_dir"],
+                                                               split=self.config["dataset"]["local_train_set"])
+                if self.config["dataset"]["local_val_set"]:
+                    self.val_dataset = datasets.load_dataset(self.config["dataset"]["local_dataset_dir"],
+                                                               split=self.config["dataset"]["local_val_set"])
+            elif os.path.exists(os.path.join(self.config["dataset"]["local_dataset_dir"], "dataset_dict.json")):
+                if self.config["dataset"]["local_train_set"]:
+                    self.train_dataset = datasets.load_from_disk(
+                        self.config["dataset"]["local_dataset_dir"] + "/" + self.config["dataset"]["local_train_set"])
+                if self.config["dataset"]["local_val_set"]:
+                    self.val_dataset = datasets.load_from_disk(
+                        self.config["dataset"]["local_dataset_dir"] + "/" + self.config["dataset"]["local_val_set"])
+            else:
+                raise ValueError(
+                    f'Invalid Dataset format {self.config["dataset"]["local_dataset_dir"]}.')
 
 
         if self.config["dataset"]["max_length"] == "Model Max Length":
@@ -105,10 +103,13 @@ class QloraTrainer(PeftTrainer):
             ))
     def generate_prompt(self,sample,eos_token):
 
-        prompt = self.config["dataset"]["prefix1"]+sample[self.config["dataset"]["datatset_col1"]]+\
-                 self.config["dataset"]["prefix2"] + sample[self.config["dataset"]["datatset_col2"]]+eos_token
-        # print("prompt:",prompt)
-        return prompt
+        return (
+            self.config["dataset"]["prefix1"]
+            + sample[self.config["dataset"]["datatset_col1"]]
+            + self.config["dataset"]["prefix2"]
+            + sample[self.config["dataset"]["datatset_col2"]]
+            + eos_token
+        )
 
     def load_model(self):
 
@@ -133,14 +134,17 @@ class QloraTrainer(PeftTrainer):
         if not self.tokenizer.pad_token:
             self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
             self.base_model.resize_token_embeddings(len(self.tokenizer))
-        if self.config["training"]["gradient_checkpointing"] and not self.config["model"]["base_model_name"].rfind("phi")>=0:
+        if (
+            self.config["training"]["gradient_checkpointing"]
+            and self.config["model"]["base_model_name"].rfind("phi") < 0
+        ):
             # self.base_model.gradient_checkpointing_enable()
             self.base_model = prepare_model_for_kbit_training(self.base_model,use_gradient_checkpointing=True,gradient_checkpointing_kwargs={'use_reentrant':False})
         else:
             self.base_model = prepare_model_for_kbit_training(self.base_model, use_gradient_checkpointing=False,gradient_checkpointing_kwargs={'use_reentrant':False})
         if  self.config["model"]["base_model_name"].lower().rfind("llama")>=0 or \
-            self.config["model"]["base_model_name"].lower().rfind("mistral") >= 0 or \
-            self.config["model"]["base_model_name"].lower().rfind("zephyr") >= 0:
+                self.config["model"]["base_model_name"].lower().rfind("mistral") >= 0 or \
+                self.config["model"]["base_model_name"].lower().rfind("zephyr") >= 0:
             target_modules = LORA_TARGET_MODULES["llama"]
             task_type = "CAUSAL_LM"
         elif self.config["model"]["base_model_name"].lower().find("falcon") >= 0:
@@ -155,7 +159,7 @@ class QloraTrainer(PeftTrainer):
         else:
             raise ValueError(f'{self.config["model"]["base_model_name"]} is not yet supported.')
             #T5,bart, task_type = "SEQ_2_SEQ_LM" ,AutoModelForSeq2SeqLM
-        
+
         lora_config = LoraConfig(
             r=self.config["model"]["lora_r"],
             lora_alpha=self.config["model"]["lora_alpha"],
@@ -171,15 +175,23 @@ class QloraTrainer(PeftTrainer):
         self.run_name = datetime.now().strftime("run_%Y-%m-%d_%H-%M-%S")
         logging_dir = os.path.join(self.config["training"]["root_dir"],"runs", self.run_name,"tensorboard")
         run_output_model_name = self.config['model']['base_model_name'].replace('/', '_')
-        output_model_dir = os.path.join(self.config["training"]["root_dir"],"runs",  self.run_name,"output_model", run_output_model_name + "_adapter")
+        output_model_dir = os.path.join(
+            self.config["training"]["root_dir"],
+            "runs",
+            self.run_name,
+            "output_model",
+            f"{run_output_model_name}_adapter",
+        )
         checkpoint_dir = os.path.join(self.config["training"]["root_dir"],"runs",  self.run_name)
         self.trainer = transformers.Trainer(
             model=self.fused_model,
             train_dataset=self.train_dataset,
-            eval_dataset= self.val_dataset if self.val_dataset else None,
+            eval_dataset=self.val_dataset if self.val_dataset else None,
             args=transformers.TrainingArguments(
                 per_device_train_batch_size=self.config["training"]["batch_size"],
-                gradient_accumulation_steps=self.config["training"]["gradient_accumulation_steps"],
+                gradient_accumulation_steps=self.config["training"][
+                    "gradient_accumulation_steps"
+                ],
                 warmup_steps=self.config["training"]["warmup_steps"],
                 num_train_epochs=self.config["training"]["epochs"],
                 learning_rate=self.config["training"]["learning_rate"],
@@ -188,22 +200,29 @@ class QloraTrainer(PeftTrainer):
                 report_to="tensorboard",
                 optim=self.config["training"]["optimizer"],
                 lr_scheduler_type=self.config["training"]["lr_scheduler_type"],
-                load_best_model_at_end=True if self.val_dataset else False,
+                load_best_model_at_end=bool(self.val_dataset),
                 save_strategy="steps",
-                save_steps = self.config["training"]["eval_steps"],
+                save_steps=self.config["training"]["eval_steps"],
                 save_total_limit=1,
                 evaluation_strategy="steps" if self.val_dataset else "no",
-                eval_steps=self.config["training"]["eval_steps"],  # eval interval
+                eval_steps=self.config["training"]["eval_steps"],
                 per_device_eval_batch_size=1,
-                # eval_steps=10,  # eval interval
-                logging_steps=100,#self.config["training"]["eval_steps"]
-                # run_name=self.run_name,
+                logging_steps=100,
                 logging_dir=logging_dir,
             ),
-
-            callbacks=[self.logging_callback,transformers.EarlyStoppingCallback(early_stopping_patience=self.config["training"]["early_stopping_patience"]) ] if self.config["training"]["early_stopping_patience"]>0 else [self.logging_callback],
-            data_collator=transformers.DataCollatorForLanguageModeling(self.tokenizer, mlm=False),
-
+            callbacks=[
+                self.logging_callback,
+                transformers.EarlyStoppingCallback(
+                    early_stopping_patience=self.config["training"][
+                        "early_stopping_patience"
+                    ]
+                ),
+            ]
+            if self.config["training"]["early_stopping_patience"] > 0
+            else [self.logging_callback],
+            data_collator=transformers.DataCollatorForLanguageModeling(
+                self.tokenizer, mlm=False
+            ),
         )
 
         self.fused_model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
@@ -221,14 +240,26 @@ class QloraTrainer(PeftTrainer):
         else:
             base_model = AutoModelForCausalLM.from_pretrained(self.config["model"]["base_model_path"], device_map="cpu",trust_remote_code=True)
         run_output_model_name = self.config['model']['base_model_name'].replace('/', '_')
-        output_adapter_model_dir = os.path.join(self.config["training"]["root_dir"], "runs", self.run_name, "output_model",
-                                        run_output_model_name + "_adapter")
+        output_adapter_model_dir = os.path.join(
+            self.config["training"]["root_dir"],
+            "runs",
+            self.run_name,
+            "output_model",
+            f"{run_output_model_name}_adapter",
+        )
 
         model = PeftModel.from_pretrained(base_model, output_adapter_model_dir)
 
         merged_model = model.merge_and_unload()
         run_output_model_name = self.config['model']['base_model_name'].replace('/', '_')
-        output_merged_model_dir = os.path.join(self.config["training"]["root_dir"], "runs", self.run_name, "output_model","merged_"+run_output_model_name,"ori")
+        output_merged_model_dir = os.path.join(
+            self.config["training"]["root_dir"],
+            "runs",
+            self.run_name,
+            "output_model",
+            f"merged_{run_output_model_name}",
+            "ori",
+        )
         merged_model.save_pretrained(output_merged_model_dir)
         self.tokenizer.save_pretrained(output_merged_model_dir)
 

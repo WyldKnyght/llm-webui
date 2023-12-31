@@ -22,17 +22,17 @@ def get_model_prompt_template(model_type="llama2"):
         prompt_template = PromptTemplate.from_template(
             "{question}"
         )
-    elif model_type == "llama2":
+    elif (
+        model_type == "llama2"
+        or model_type != "zephyr"
+        and model_type == "mistral"
+    ):
         prompt_template = PromptTemplate.from_template(
             "<s>[INST] {question} [/INST]"
         )
     elif model_type == "zephyr":
         prompt_template = PromptTemplate.from_template(
             "<|user|>\n{question}</s><|assistant|>\n"
-        )
-    elif model_type == "mistral":
-        prompt_template = PromptTemplate.from_template(
-            "<s>[INST] {question} [/INST]"
         )
     return prompt_template
 
@@ -43,7 +43,7 @@ def format_chat_history_prompt_for_llama2_7b_chat(chat_history):
     new_input = "<s>"
     for i, hist in enumerate(chat_history):
         if i % 2 == 0:
-            new_input = new_input + "[INST] " + hist + " [/INST]"
+            new_input = f"{new_input}[INST] {hist} [/INST]"
         else:
             new_input = new_input + hist
     return new_input
@@ -53,7 +53,7 @@ def format_chat_history_prompt_for_mistral_7b_instruct(chat_history):
     new_input = "<s>"
     for i, hist in enumerate(chat_history):
         if i % 2 == 0:
-            new_input = new_input + "[INST] " + hist + " [/INST]"
+            new_input = f"{new_input}[INST] {hist} [/INST]"
         else:
             new_input = new_input + hist
     return new_input
@@ -64,17 +64,16 @@ def format_chat_history_prompt_for_zephyr_7b_instruct(chat_history):
     for i, hist in enumerate(chat_history):
         if i % 2 == 0:
             new_input = new_input + "<|user|>\n" + hist + "</s>"
+        elif i==len(chat_history)-1:
+            new_input = new_input + "<|assistant|>\n" + hist + ""
         else:
-            if i==len(chat_history)-1:
-                new_input = new_input + "<|assistant|>\n" + hist + ""
-            else:
-                new_input = new_input + "<|assistant|>\n" + hist + "</s>"
+            new_input = new_input + "<|assistant|>\n" + hist + "</s>"
     return new_input
 
 def get_chat_history_prompt(chat_history,model_type="llama2"):
     if model_type == "other model":
         prompt = ','.join(chat_history[:-2])
-        prompt = prompt + chat_history[-2]
+        prompt += chat_history[-2]
     elif model_type == "llama2":
         prompt = format_chat_history_prompt_for_llama2_7b_chat(chat_history)
     elif model_type == "zephyr":

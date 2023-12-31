@@ -33,7 +33,7 @@ import socket
 # os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:8889'
 
 LOCAL_HOST_IP = "0.0.0.0"
-TENSORBOARD_URL = "http://" + LOCAL_HOST_IP + ":6006/"
+TENSORBOARD_URL = f"http://{LOCAL_HOST_IP}:6006/"
 INIT_DATASET_NAME = "test_python_code_instructions_5000_rows"
 
 RAG_DATA_LIST_DROPDOWN = ""
@@ -60,11 +60,7 @@ chatbot_height = 500
 rag_chatbot_history=[]
 rag_stop_generation_status = False
 qa_with_rag = QAWithRAG()
-train_param_config = {}
-train_param_config["dataset"]={}
-train_param_config["model"]={}
-train_param_config["training"]={}
-
+train_param_config = {"dataset": {}, "model": {}, "training": {}}
 model_zoo_config = {}
 transformer_optimizer_list = []
 model_context_window = 0
@@ -95,18 +91,20 @@ local_dataset_root_dir = ""
 def get_local_embedding_model_list():
     local_model_root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rag", "embedding_models")
     local_model_root_files = os.listdir(local_model_root_dir)
-    local_model_list = []
-    for model_dir in local_model_root_files:
-        if os.path.isdir(os.path.join(local_model_root_dir, model_dir)):
-            local_model_list.append(model_dir)
+    local_model_list = [
+        model_dir
+        for model_dir in local_model_root_files
+        if os.path.isdir(os.path.join(local_model_root_dir, model_dir))
+    ]
     return local_model_list,local_model_root_dir
 def get_local_model_list():
     local_model_root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
     local_model_root_files = os.listdir(local_model_root_dir)
-    local_model_list = []
-    for model_dir in local_model_root_files:
-        if os.path.isdir(os.path.join(local_model_root_dir, model_dir)):
-            local_model_list.append(model_dir)
+    local_model_list = [
+        model_dir
+        for model_dir in local_model_root_files
+        if os.path.isdir(os.path.join(local_model_root_dir, model_dir))
+    ]
     return local_model_list,local_model_root_dir
 def get_local_dataset_list():
     local_dataset_list = []
@@ -162,10 +160,10 @@ def init():
     INIT_COL3_TEXT = str(DATASET_FIRST_ROW[col_names[3]])
     INIT_COL4_TEXT = ""
     local_model_list,local_model_root_dir = get_local_model_list()
-    base_model_names = [model_name for model_name in model_zoo_config["model_list"]]
+    base_model_names = list(model_zoo_config["model_list"])
     training_base_model_names = [model_name for model_name in base_model_names if not model_name.endswith(".gguf")]
     # base_model_context_window =  [model_name[1] for model_name in model_zoo_config["model_list"]]
-    embedding_model_names = [model_name for model_name in model_zoo_config["embedding_model_list"]]
+    embedding_model_names = list(model_zoo_config["embedding_model_list"])
     local_dataset_list, local_dataset_root_dir = get_local_dataset_list()
 
 
@@ -659,9 +657,9 @@ with gr.Blocks(title="FINETUNE",css="#vertical_center_align_markdown { position:
                         for doc_type in supported_doc_type:
                             matched_file_list += glob.glob(os.path.join(rag_data_dir, doc_type), recursive=False)
                         matched_file_list.sort(key=lambda file: os.path.getmtime(file), reverse=True)
-                        matched_file_name_list = []
-                        for matched_file in matched_file_list:
-                            matched_file_name_list.append(os.path.basename(matched_file))
+                        matched_file_name_list = [
+                            os.path.basename(matched_file) for matched_file in matched_file_list
+                        ]
                         return gr.update(choices=matched_file_name_list,value=matched_file_name_list[0] if matched_file_name_list else None)
                     refresh_rag_data_list_btn.click(click_refresh_rag_data_list_btn,[],rag_data_list_dropdown)
 
@@ -867,11 +865,10 @@ with gr.Blocks(title="FINETUNE",css="#vertical_center_align_markdown { position:
         if home_chat_model_source_radio == "Download From Huggingface Hub":
             if not hub_home_chat_model_names_dropdown:
                 model_download_status = '<span style="color:red">&nbsp;&nbsp;&nbsp;&nbsp;No model is selected.</span>'
+            elif validate_model_path(hub_home_chat_model_names_dropdown)[0]:
+                model_download_status = '<span style="color:green">&nbsp;&nbsp;&nbsp;&nbsp;This model has already been downloaded to local,click load model to run.</span>'
             else:
-                if validate_model_path(hub_home_chat_model_names_dropdown)[0]:
-                    model_download_status = '<span style="color:green">&nbsp;&nbsp;&nbsp;&nbsp;This model has already been downloaded to local,click load model to run.</span>'
-                else:
-                    model_download_status = '<span style="color:red">&nbsp;&nbsp;&nbsp;&nbsp;This model has not been downloaded.</span>'
+                model_download_status = '<span style="color:red">&nbsp;&nbsp;&nbsp;&nbsp;This model has not been downloaded.</span>'
             return gr.update(visible=True), gr.update(visible=False), gr.update(
                 visible=False), gr.update(visible=True, value=model_download_status), gr.update(
                 visible=True), gr.update(
@@ -948,7 +945,7 @@ with gr.Blocks(title="FINETUNE",css="#vertical_center_align_markdown { position:
         else:
             cur_model_name = local_home_chat_model_names_dropdown
         if not validate_model_path(cur_model_name)[0]:
-            raise gr.Error(f"Model does not exist!")
+            raise gr.Error("Model does not exist!")
         global infer_model
         global stop_generation_status
         stop_generation_status = True
@@ -965,7 +962,6 @@ with gr.Blocks(title="FINETUNE",css="#vertical_center_align_markdown { position:
                                             temperature=temperature_slider,
                                             top_k=top_k_slider, top_p=top_p_slider,
                                             repetition_penalty=repeat_penalty_slider)
-            load_model_status, msg = infer_model.load_model()
         else:
             infer_model = HuggingfaceInference(model_path=model_path, max_new_tokens=max_new_tokens_slider,
                                             temperature=temperature_slider,
@@ -973,21 +969,22 @@ with gr.Blocks(title="FINETUNE",css="#vertical_center_align_markdown { position:
                                             repetition_penalty=repeat_penalty_slider,
                                                using_4bit_quantization=using_4bit_quantization_checkbox,
                                                low_cpu_mem_usage=low_cpu_mem_usage_checkbox)
-            load_model_status, msg = infer_model.load_model()
+        load_model_status, msg = infer_model.load_model()
         if load_model_status == -1:
             raise gr.Error(f"Loading model error:{msg}")
-            if infer_model:
-                infer_model.free_memory()
-                infer_model = None
-            torch.cuda.empty_cache()
-            return
         progress(1.0)
         return gr.update()
 
     def update_model_running_status():
         global chatbot_history
-        return gr.update(visible=True,
-                         value=f"<span style='color:green'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model is runing ...</span>"),chatbot_history,gr.update()
+        return (
+            gr.update(
+                visible=True,
+                value="<span style='color:green'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model is runing ...</span>",
+            ),
+            chatbot_history,
+            gr.update(),
+        )
 
 
     def show_model_running_status():
@@ -1045,7 +1042,6 @@ with gr.Blocks(title="FINETUNE",css="#vertical_center_align_markdown { position:
             answer = infer_model(prompt)
         else:
             raise gr.Error("Model is not loaded!")
-            return chatbot_history,gr.update(value="")
         print(f"{model_type} output:", answer)
         for char in answer:
             if stop_generation_status:
@@ -1065,25 +1061,23 @@ with gr.Blocks(title="FINETUNE",css="#vertical_center_align_markdown { position:
         chatbot_history_list = chatbot_history_np.tolist()
         stop_generation_status = False
         running_model_name = "other model"
-        if infer_model:
-            if infer_model.model_path.lower().find("mistral") >= 0 and infer_model.model_path.lower().find(
-                    "instruct") >= 0:
-                running_model_name = "mistral"
-                prompt = get_chat_history_prompt(chatbot_history_list, running_model_name)
-            elif infer_model.model_path.lower().find("llama") >= 0 and infer_model.model_path.lower().find("chat") >= 0:
-                running_model_name = "llama2"
-                prompt = get_chat_history_prompt(chatbot_history_list, running_model_name)
-            elif infer_model.model_path.lower().find("zephyr") >= 0:
-                running_model_name = "zephyr"
-                prompt = get_chat_history_prompt(chatbot_history_list, running_model_name)
-            else:
-                prompt = ','.join(chatbot_history_list[:-2])
-                prompt = prompt + chatbot_history_list[-2]
-            print(f"{running_model_name} input prompt:", prompt)
-            answer = infer_model(prompt)
-        else:
+        if not infer_model:
             raise gr.Error("Model is not loaded!")
-            return chatbot_history,gr.update(value="")
+        if infer_model.model_path.lower().find("mistral") >= 0 and infer_model.model_path.lower().find(
+                    "instruct") >= 0:
+            running_model_name = "mistral"
+            prompt = get_chat_history_prompt(chatbot_history_list, running_model_name)
+        elif infer_model.model_path.lower().find("llama") >= 0 and infer_model.model_path.lower().find("chat") >= 0:
+            running_model_name = "llama2"
+            prompt = get_chat_history_prompt(chatbot_history_list, running_model_name)
+        elif infer_model.model_path.lower().find("zephyr") >= 0:
+            running_model_name = "zephyr"
+            prompt = get_chat_history_prompt(chatbot_history_list, running_model_name)
+        else:
+            prompt = ','.join(chatbot_history_list[:-2])
+            prompt += chatbot_history_list[-2]
+        print(f"{running_model_name} input prompt:", prompt)
+        answer = infer_model(prompt)
         print(f"{running_model_name} output:", answer)
         for char in answer:
             if stop_generation_status:
@@ -1178,18 +1172,17 @@ with gr.Blocks(title="FINETUNE",css="#vertical_center_align_markdown { position:
         dataset_config_path1 = os.path.join(hg_dataset_dir, "dataset_dict.json")
         dataset_config_path2 = os.path.join(hg_dataset_dir, "dataset_infos.json")
         if not os.path.exists(dataset_config_path1) and not os.path.exists(
-                dataset_config_path2):
+            dataset_config_path2
+        ):
             raise gr.Warning(f"Invalid HG Dataset:{hg_dataset_dir}")
 
-            return gr.update(), gr.update(), gr.update(), gr.update()
-        else:
-            DATASET_FIRST_ROW, split_list = get_first_row_from_dataset(hg_dataset_dir)
-            if "train" in split_list:
-                split_list.pop(split_list.index("train"))
-                split_list.insert(0, "train")
+        DATASET_FIRST_ROW, split_list = get_first_row_from_dataset(hg_dataset_dir)
+        if "train" in split_list:
+            split_list.pop(split_list.index("train"))
+            split_list.insert(0, "train")
 
-            return gr.update(choices=split_list, value=split_list[0] if split_list else None), gr.update(
-                choices=split_list, value=None), gr.update(visible=True), gr.update(visible=False)
+        return gr.update(choices=split_list, value=split_list[0] if split_list else None), gr.update(
+            choices=split_list, value=None), gr.update(visible=True), gr.update(visible=False)
 
 
     def change_hg_dataset_path_textbox(hg_dataset_path_textbox):
@@ -1199,27 +1192,25 @@ with gr.Blocks(title="FINETUNE",css="#vertical_center_align_markdown { position:
             return gr.update(
                 value="<span style='color:red'>&nbsp;&nbsp;&nbsp;&nbsp;This Dataset's name is empty!</span>"), gr.update(
                 choices=[], value=None), gr.update(choices=[], value=None)
-        else:
-
-            hg_dataset_dir = os.path.join(local_dataset_root_dir,
-                                          hg_dataset_path_textbox)
-            dataset_config_path1 = os.path.join(hg_dataset_dir, "dataset_dict.json")
-            dataset_config_path2 = os.path.join(hg_dataset_dir, "dataset_infos.json")
-            if not os.path.exists(dataset_config_path1) and not os.path.exists(
-                    dataset_config_path2):
-                # raise gr.Warning(f"Invalid HG Dataset:{hg_dataset_dir}")
-                return gr.update(
-                    value="<span style='color:red'>&nbsp;&nbsp;&nbsp;&nbsp;This Dataset has not been downloaded.</span>"), gr.update(
-                    choices=[], value=None), gr.update(choices=[], value=None)
-            else:
-                DATASET_FIRST_ROW, split_list = get_first_row_from_dataset(hg_dataset_dir)
-                if "train" in split_list:
-                    split_list.pop(split_list.index("train"))
-                    split_list.insert(0, "train")
-                return gr.update(
-                    value="<span style='color:green'>&nbsp;&nbsp;&nbsp;&nbsp;This Dataset has already been downloaded.</span>"), gr.update(
-                    choices=split_list, value=split_list[0] if split_list else None), gr.update(choices=split_list,
-                                                                                                value="")
+        hg_dataset_dir = os.path.join(local_dataset_root_dir,
+                                      hg_dataset_path_textbox)
+        dataset_config_path1 = os.path.join(hg_dataset_dir, "dataset_dict.json")
+        dataset_config_path2 = os.path.join(hg_dataset_dir, "dataset_infos.json")
+        if not os.path.exists(dataset_config_path1) and not os.path.exists(
+            dataset_config_path2
+        ):
+            # raise gr.Warning(f"Invalid HG Dataset:{hg_dataset_dir}")
+            return gr.update(
+                value="<span style='color:red'>&nbsp;&nbsp;&nbsp;&nbsp;This Dataset has not been downloaded.</span>"), gr.update(
+                choices=[], value=None), gr.update(choices=[], value=None)
+        DATASET_FIRST_ROW, split_list = get_first_row_from_dataset(hg_dataset_dir)
+        if "train" in split_list:
+            split_list.pop(split_list.index("train"))
+            split_list.insert(0, "train")
+        return gr.update(
+            value="<span style='color:green'>&nbsp;&nbsp;&nbsp;&nbsp;This Dataset has already been downloaded.</span>"), gr.update(
+            choices=split_list, value=split_list[0] if split_list else None), gr.update(choices=split_list,
+                                                                                        value="")
 
 
     hg_dataset_path_textbox.change(change_hg_dataset_path_textbox, hg_dataset_path_textbox,

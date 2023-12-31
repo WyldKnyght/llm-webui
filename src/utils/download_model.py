@@ -41,7 +41,7 @@ class ModelDownloader:
         if model[-1] == '/':
             model = model[:-1]
 
-        if model.startswith(base + '/'):
+        if model.startswith(f'{base}/'):
             model = model[len(base) + 1:]
 
         model_parts = model.split(":")
@@ -97,33 +97,32 @@ class ModelDownloader:
                 is_tiktoken = re.match(r".*\.tiktoken", fname)
                 is_tokenizer = re.match(r"(tokenizer|ice|spiece).*\.model", fname) or is_tiktoken
                 is_text = re.match(r".*\.(txt|json|py|md)", fname) or is_tokenizer
-                if True or any((is_pytorch, is_safetensors, is_pt, is_gguf, is_tokenizer, is_text)):
-                    if 'lfs' in dict[i]:
-                        sha256.append([fname, dict[i]['lfs']['oid']])
+                if 'lfs' in dict[i]:
+                    sha256.append([fname, dict[i]['lfs']['oid']])
 
-                    if is_text:
-                        links.append(f"https://huggingface.co/{model}/resolve/{branch}/{fname}")
-                        classifications.append('text')
-                        link_file_size_list.append(dict[i]["size"])
-                        continue
+                if is_text:
+                    links.append(f"https://huggingface.co/{model}/resolve/{branch}/{fname}")
+                    classifications.append('text')
+                    link_file_size_list.append(dict[i]["size"])
+                    continue
 
-                    if not text_only:
-                        links.append(f"https://huggingface.co/{model}/resolve/{branch}/{fname}")
-                        link_file_size_list.append(dict[i]["size"])
-                        if is_safetensors:
-                            has_safetensors = True
-                            classifications.append('safetensors')
-                        elif is_pytorch:
-                            pytorch_indexs.append(len(links)-1)
-                            has_pytorch = True
-                            classifications.append('pytorch')
-                        elif is_pt:
-                            pytorch_indexs.append(len(links)-1)
-                            has_pt = True
-                            classifications.append('pt')
-                        elif is_gguf:
-                            has_gguf = True
-                            classifications.append('gguf')
+                if not text_only:
+                    links.append(f"https://huggingface.co/{model}/resolve/{branch}/{fname}")
+                    link_file_size_list.append(dict[i]["size"])
+                    if is_safetensors:
+                        has_safetensors = True
+                        classifications.append('safetensors')
+                    elif is_pytorch:
+                        pytorch_indexs.append(len(links)-1)
+                        has_pytorch = True
+                        classifications.append('pytorch')
+                    elif is_pt:
+                        pytorch_indexs.append(len(links)-1)
+                        has_pt = True
+                        classifications.append('pt')
+                    elif is_gguf:
+                        has_gguf = True
+                        classifications.append('gguf')
 
             cursor = base64.b64encode(f'{{"file_name":"{dict[-1]["path"]}"}}'.encode()) + b':50'
             cursor = base64.b64encode(cursor)
@@ -195,11 +194,12 @@ class ModelDownloader:
 
         if not is_llamacpp:
             metadata = f'url: https://huggingface.co/{model}\n' \
-                       f'branch: {branch}\n' \
-                       f'download date: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
+                           f'branch: {branch}\n' \
+                           f'download date: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
 
-            sha256_str = '\n'.join([f'    {item[1]} {item[0]}' for item in sha256])
-            if sha256_str:
+            if sha256_str := '\n'.join(
+                [f'    {item[1]} {item[0]}' for item in sha256]
+            ):
                 metadata += f'sha256sum:\n{sha256_str}'
 
             metadata += '\n'
